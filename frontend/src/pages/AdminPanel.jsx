@@ -3,7 +3,7 @@ import { FiKey, FiLayers, FiUserPlus } from 'react-icons/fi';
 import RoleAccessManager from '../components/admin/RoleAccessManager.jsx';
 import RoleManager from '../components/admin/RoleManager.jsx';
 import UserManager from '../components/admin/UserManager.jsx';
-import { useAppSelector } from '../hooks/storeHooks.js';
+import { useAppSelector } from '../hooks/storeHooks';
 
 const AdminPanel = () => {
   const { user } = useAppSelector((state) => state.auth);

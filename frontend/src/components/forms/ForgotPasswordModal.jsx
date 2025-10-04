@@ -2,7 +2,7 @@ import { yupResolver } from '@hookform/resolvers/yup';
 import { Modal, Input } from 'antd';
 import PropTypes from 'prop-types';
 import { Controller, useForm } from 'react-hook-form';
-import { useAppDispatch } from '../../hooks/storeHooks.js';
+import { useAppDispatch } from '../../hooks/storeHooks';
 import { resetPassword } from '../../features/auth/authSlice.js';
 import * as yup from 'yup';
 

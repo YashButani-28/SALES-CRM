@@ -6,7 +6,8 @@ import LoginPage from './pages/LoginPage.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import AdminPanel from './pages/AdminPanel.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
-import { useAppDispatch, useAppSelector } from './hooks/storeHooks.js';
+import CustomFieldsPage from './pages/Settings/CustomFieldsPage';
+import { useAppDispatch, useAppSelector } from './hooks/storeHooks';
 import { fetchCurrentUser } from './features/auth/authSlice.js';
 import { setAuthToken } from './api/client.js';
 
@@ -34,6 +35,9 @@ const App = () => {
             element={<ProtectedRoute permissions={adminPermissions} module="user_management" mode="any" />}
           >
             <Route index element={<AdminPanel />} />
+          </Route>
+          <Route path="settings">
+            <Route path="custom-fields" element={<CustomFieldsPage />} />
           </Route>
           <Route path="profile" element={<ProfilePage />} />
         </Route>

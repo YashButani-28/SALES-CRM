@@ -1,6 +1,6 @@
 import { Card, Tag } from 'antd';
 import { useMemo } from 'react';
-import { useAppSelector } from '../hooks/storeHooks.js';
+import { useAppSelector } from '../hooks/storeHooks';
 
 const modules = [
   {

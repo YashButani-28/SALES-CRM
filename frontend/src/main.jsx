@@ -6,7 +6,7 @@ import { PersistGate } from 'redux-persist/integration/react';
 import { ConfigProvider, theme } from 'antd';
 import { Toaster } from 'react-hot-toast';
 import App from './App.jsx';
-import { persistor, store } from './app/store.js';
+import { persistor, store } from './app/store';
 import './styles.css';
 import 'antd/dist/reset.css';
 

@@ -15,11 +15,12 @@ import permissionsReducer from '../features/permissions/permissionsSlice.js';
 import rolesReducer from '../features/roles/rolesSlice.js';
 import usersReducer from '../features/users/usersSlice.js';
 import modulesReducer from '../features/modules/modulesSlice.js';
+import customFieldsReducer from '../features/customFields/customFieldsSlice';
 
 const rootPersistConfig = {
   key: 'root',
   storage,
-  whitelist: ['auth', 'permissions', 'roles', 'users', 'modules'],
+  whitelist: ['auth', 'permissions', 'roles', 'users', 'modules', 'customFields'],
 };
 
 const rootReducer = combineReducers({
@@ -28,6 +29,7 @@ const rootReducer = combineReducers({
   roles: rolesReducer,
   users: usersReducer,
   modules: modulesReducer,
+  customFields: customFieldsReducer,
 });
 
 const persistedReducer = persistReducer(rootPersistConfig, rootReducer);
@@ -44,4 +46,7 @@ export const store = configureStore({
 
 export const persistor = persistStore(store);
 
-export const getAuthToken = (state) => state.auth.token;
+export type RootState = ReturnType<typeof store.getState>;
+export type AppDispatch = typeof store.dispatch;
+
+export const getAuthToken = (state: RootState) => state.auth.token;

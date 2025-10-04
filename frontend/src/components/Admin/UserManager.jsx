@@ -2,7 +2,7 @@ import { yupResolver } from '@hookform/resolvers/yup';
 import { Button, Card, Col, Input, Row, Select, Space, Table, Typography } from 'antd';
 import { useEffect } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { useAppDispatch, useAppSelector } from '../../hooks/storeHooks.js';
+import { useAppDispatch, useAppSelector } from '../../hooks/storeHooks';
 import { createUserAccount } from '../../features/users/usersSlice.js';
 import { fetchRoles } from '../../features/roles/rolesSlice.js';
 import * as yup from 'yup';
@@ -110,6 +110,7 @@ const UserManager = () => {
                     {...field}
                     allowClear
                     placeholder="Assign a role"
+                    className="w-full"
                     size="large"
                     options={roles.map((role) => ({ label: role.name, value: role.id }))}
                   />
@@ -125,6 +126,7 @@ const UserManager = () => {
                   <Select
                     {...field}
                     size="large"
+                    className="w-full"
                     options={[
                       { label: 'Active', value: 'active' },
                       { label: 'Inactive', value: 'inactive' },

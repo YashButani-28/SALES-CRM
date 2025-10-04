@@ -1,7 +1,7 @@
 import { Card, Descriptions, Tag } from 'antd';
 import { FaUserShield } from 'react-icons/fa';
 import ChangePasswordForm from '../components/profile/ChangePasswordForm.jsx';
-import { useAppSelector } from '../hooks/storeHooks.js';
+import { useAppSelector } from '../hooks/storeHooks';
 
 const ProfilePage = () => {
   const { user } = useAppSelector((state) => state.auth);

@@ -13,6 +13,11 @@ export const login = async (req, res, next) => {
     const result = await loginUser({ email, password });
     return res.json(result);
   } catch (error) {
+    if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND' || error.message?.includes('connect')) {
+      return res
+        .status(500)
+        .json({ success: false, message: 'Database connection failed' });
+    }
     return next(error);
   }
 };

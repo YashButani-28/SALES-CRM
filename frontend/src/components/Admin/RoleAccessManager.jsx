@@ -2,7 +2,7 @@ import { yupResolver } from '@hookform/resolvers/yup';
 import { Alert, Button, Card, Checkbox, Empty, Table, Typography, Select } from 'antd';
 import { useEffect, useMemo } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { useAppDispatch, useAppSelector } from '../../hooks/storeHooks.js';
+import { useAppDispatch, useAppSelector } from '../../hooks/storeHooks';
 import { fetchRoles, fetchRoleModulePermissions, saveRoleModulePermissions } from '../../features/roles/rolesSlice.js';
 import { fetchModules } from '../../features/modules/modulesSlice.js';
 import * as yup from 'yup';

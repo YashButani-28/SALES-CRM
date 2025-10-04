@@ -1,7 +1,7 @@
 import { Spin } from 'antd';
 import { useMemo } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { useAppSelector } from '../hooks/storeHooks.js';
+import { useAppSelector } from '../hooks/storeHooks';
 
 const ProtectedRoute = ({ permission, permissions, module, modules, mode = 'all' }) => {
   const location = useLocation();

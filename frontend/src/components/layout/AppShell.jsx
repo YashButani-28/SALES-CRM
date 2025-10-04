@@ -1,9 +1,9 @@
-import { FiHome, FiUsers, FiUser } from 'react-icons/fi';
+import { FiHome, FiUsers, FiUser, FiSettings } from 'react-icons/fi';
 import { MenuOutlined } from '@ant-design/icons';
 import { Button, Layout, Menu, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { useAppDispatch, useAppSelector } from '../../hooks/storeHooks.js';
+import { useAppDispatch, useAppSelector } from '../../hooks/storeHooks';
 import { logout } from '../../features/auth/authSlice.js';
 
 const { Header, Sider, Content } = Layout;
@@ -35,13 +35,16 @@ const AppShell = () => {
     return actions ? actions.has('read') : false;
   };
 
-  const menuItems = useMemo(
-    () => [
+  const menuItems = useMemo(() => {
+    const base = [
       { key: 'dashboard', icon: <FiHome />, label: 'Dashboard', path: '/', module: 'dashboard' },
       { key: 'user-management', icon: <FiUsers />, label: 'User Management', path: '/admin', module: 'user_management' },
-    ],
-    []
-  );
+    ];
+    if (user?.role === 'Admin' || isSuperAdmin) {
+      base.push({ key: 'settings', icon: <FiSettings />, label: 'Settings', path: '/settings/custom-fields', module: null });
+    }
+    return base;
+  }, [user, isSuperAdmin]);
 
   const visibleMenuItems = useMemo(
     () => menuItems.filter((item) => canViewModule(item.module)),
@@ -49,6 +52,7 @@ const AppShell = () => {
   );
 
   const selectedKey = useMemo(() => {
+    if (location.pathname.startsWith('/settings')) return 'settings';
     if (location.pathname.startsWith('/admin')) return 'user-management';
     return 'dashboard';
   }, [location.pathname]);
@@ -70,6 +74,9 @@ const AppShell = () => {
   }, [navigate, selectedKey, visibleMenuItems]);
 
   const headerTitle = useMemo(() => {
+    if (location.pathname.startsWith('/settings')) {
+      return 'Settings';
+    }
     if (location.pathname.startsWith('/admin')) {
       return 'User Management';
     }

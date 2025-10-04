@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useLocation, useNavigate } from 'react-router-dom';
 import * as yup from 'yup';
-import { useAppDispatch, useAppSelector } from '../hooks/storeHooks.js';
+import { useAppDispatch, useAppSelector } from '../hooks/storeHooks';
 import { login } from '../features/auth/authSlice.js';
 import ForgotPasswordModal from './forms/ForgotPasswordModal.jsx';
 

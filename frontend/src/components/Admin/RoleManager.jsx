@@ -2,7 +2,7 @@ import { yupResolver } from '@hookform/resolvers/yup';
 import { Button, Card, Col, Input, Row, Select, Space, Table, Typography } from 'antd';
 import { useEffect } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { useAppDispatch, useAppSelector } from '../../hooks/storeHooks.js';
+import { useAppDispatch, useAppSelector } from '../../hooks/storeHooks';
 import { createRole, fetchRoles } from '../../features/roles/rolesSlice.js';
 import { fetchPermissions } from '../../features/permissions/permissionsSlice.js';
 import * as yup from 'yup';
@@ -86,6 +86,7 @@ const RoleManager = () => {
                   <Select
                     {...field}
                     mode="multiple"
+                    className="w-full"
                     allowClear
                     size="large"
                     placeholder="Select permissions"

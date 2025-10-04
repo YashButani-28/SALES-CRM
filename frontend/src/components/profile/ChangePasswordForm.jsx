@@ -1,7 +1,7 @@
 import { yupResolver } from '@hookform/resolvers/yup';
 import { Button, Input } from 'antd';
 import { Controller, useForm } from 'react-hook-form';
-import { useAppDispatch } from '../../hooks/storeHooks.js';
+import { useAppDispatch } from '../../hooks/storeHooks';
 import { changePassword } from '../../features/auth/authSlice.js';
 import * as yup from 'yup';
 

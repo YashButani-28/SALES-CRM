@@ -15,6 +15,8 @@ export const login = createAsyncThunk('auth/login', async ({ email, password }, 
     const { data } = await client.post('/auth/login', { email, password });
     return data;
   } catch (error) {
+    console.log(error.message,"erroeMesssage");
+    
     return rejectWithValue(error.message || 'Unable to login');
   }
 });

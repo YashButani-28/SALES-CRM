@@ -1,119 +1,141 @@
-# Sales CRM Authentication & RBAC System
+# Sales CRM Platform
 
-This project delivers a full-stack authentication and role-based access control (RBAC) solution for the Sales CRM application.
-
-## Stack
-
-- **Backend**: Node.js, Express, PostgreSQL (`backend/`)
-- **Frontend**: React (Vite), Tailwind CSS, Axios (`frontend/`)
+Full-stack CRM reference application with authentication, RBAC, custom-field management, and dynamic entity forms.
 
 ---
 
-## Backend
+## Tech Stack
 
-### Environment Variables
+| Layer     | Stack |
+|-----------|-------|
+| Backend   | Node.js, Express, TypeScript, Prisma, PostgreSQL |
+| Frontend  | React (Vite), TypeScript, Redux Toolkit + Persist, Ant Design |
+| Auth      | JWT (role-based) |
+| Storage   | AWS S3 for file uploads |
 
-Copy `backend/.env.example` to `backend/.env` and adjust values:
+---
 
-- `PORT`: API server port (default `4000`).
-- `DATABASE_URL`: PostgreSQL connection string (e.g. `postgres://user:password@localhost:5432/sales_crm`).
-- `JWT_SECRET`: Secret used to sign JWTs.
-- `BCRYPT_SALT_ROUNDS`: Salt rounds for password hashing (`10` recommended).
+## Backend Setup
 
-### Database Migration
+### Environment Variables (`backend/.env`)
 
-Run the initial migration to create tables, relationships, and indexes:
+| Variable | Description |
+|----------|-------------|
+| `PORT` | API port (default `4000`) |
+| `DATABASE_URL` | Postgres connection string |
+| `JWT_SECRET` | Secret for signing/verifying JWTs |
+| `BCRYPT_SALT_ROUNDS` | Hash cost for passwords |
+| `AWS_ACCESS_KEY_ID` | IAM access key for S3 |
+| `AWS_SECRET_ACCESS_KEY` | IAM secret for S3 |
+| `AWS_REGION` | AWS region containing the bucket |
+| `S3_BUCKET` | S3 bucket used for uploads |
+
+### Install & Migrate
 
 ```bash
 cd backend
 npm install
-npm run migrate
+npm run migrate   # prisma migrate deploy (includes CustomFields + CustomFieldValues)
 ```
 
 ### Seed Initial Admin
 
-Seed the default administrator (idempotent – safely rerunnable):
-
 ```bash
-cd backend
 npm run seed
+# seeds admin@example.com/password123 if users table is empty
 ```
 
-The seed script creates baseline permissions/roles (if missing) and inserts `admin@example.com` with password `password123` only when the `users` table is empty.
-
-### Development Server
+### Run Dev Server
 
 ```bash
-cd backend
 npm run dev
 ```
 
-Key endpoints (`/api/...`):
+### Key API Endpoints
 
-- `POST /auth/login` — authenticate users (returns JWT + current user payload).
-- `POST /auth/change-password` — authenticated users update their password securely.
-- `POST /auth/forgot-password` — reset a password by email (admin seeding credentials, etc.).
-- `GET /modules` — list application modules and available actions for RBAC matrices.
-- `PUT /roles/:roleId/module-permissions` — replace module/action flags for a role.
-- `GET /roles/:roleId/module-permissions` — retrieve the current module/action assignments for a role.
-- `POST /users` — create user (requires `manage_users`).
-- `GET /users/me` — fetch logged-in user with role & permissions.
-- `POST /roles` — create role (requires `manage_roles`).
-- `GET /roles` — list roles and assigned permissions (`manage_roles` or `manage_users`).
-- `POST /permissions` — create permission (requires `manage_permissions`).
-- `GET /permissions` — list permissions (`manage_permissions` or `manage_roles`).
+- `POST /api/auth/login` – authenticate and receive JWT
+- `GET /api/users/me` – current profile + permissions
+- `POST /api/custom-fields` *(Admin only)* – create custom field
+- `GET /api/custom-fields?entity=Lead` *(Admin only)* – list custom fields
+- `PUT /api/custom-fields/:id` *(Admin only)* – update custom field
+- `DELETE /api/custom-fields/:id` *(Admin only)* – delete custom field
+- `POST /api/custom-fields/reorder` *(Admin only)* – reorder/group fields
+- `GET /api/custom-field-values?entity=Lead&entityId=123` – fetch values for record
+- `POST /api/custom-field-values` – create value after validation
+- `PUT /api/custom-field-values/:id` – update value with validation
+- `POST /api/uploads/sign` – presigned S3 upload URL (auth required)
+
+#### Example
+
+```bash
+curl -X POST http://localhost:4000/api/custom-fields \
+  -H "Authorization: Bearer <ADMIN_JWT>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "entity": "Lead",
+    "fieldType": "Text",
+    "label": "Industry",
+    "key": "industry",
+    "required": false
+  }'
+```
 
 ---
 
-## Frontend
+## Frontend Setup
 
-### Environment Variables
-
-Copy `frontend/.env.example` to `frontend/.env` and set the API base URL, e.g.:
+### Environment Variables (`frontend/.env`)
 
 ```
 VITE_API_BASE_URL=http://localhost:4000/api
 ```
 
-### Module-Based Access Control
-
-Run the migrations after pulling updates to ensure the new `role_module_permissions` table exists:
-
-```bash
-cd backend
-npm run migrate
-```
-
-Then seed or update roles using the new module-permission endpoint. Super Admin accounts automatically bypass module gating.
-
-### Development Server
+### Install & Run
 
 ```bash
 cd frontend
 npm install
-npm run dev           # standard dev server
-# or npm run dev:log  # mirrors output into errlog.txt for easier debugging
+npm run dev
+# or npm run dev:log to mirror Vite output to errlog.txt
 ```
 
-### UI Highlights
+### Highlights
 
-- Tailwind-powered layout enhanced with Ant Design components.
-- Login screen with centered card, forgot-password flow, and modern styling.
-- Dashboard reveals modules/actions depending on granted permissions.
-- Admin panel (requires any admin permission) with:
-  - Module permission matrix with dynamic role assignments.
-  - Role creation and permission assignment.
-  - User creation and role assignment.
-- Persistent Redux state (Redux Toolkit + Redux Persist) caching API responses.
-- Forms powered by React Hook Form + Yup with inline validation feedback.
-- Sidebar navigation automatically hides modules when the logged-in role lacks `read` access (Super Admin bypass supported).
-- Context-aware navigation, profile management, and toast-driven feedback.
+- Admin Settings ➜ Custom Fields: Ant Design table + drag & drop, modal editor.
+- Dynamic entity forms render admin-configured fields with React Hook Form + Yup.
+- Redux Toolkit slice caches fields per-entity (persisted between sessions).
+- Auth-aware navigation hides modules for roles without `read` access.
+
+---
+
+## Testing
+
+### Backend (Jest)
+
+```bash
+cd backend
+npm run test
+```
+
+Covers:
+- `validationJsonToYup` validation logic.
+- Custom Fields API integration (Admin vs non-admin, CRUD basics).
+
+### Frontend (Vitest/Jest)
+
+```bash
+cd frontend
+npm run test
+```
+
+Validates the `validationJsonToYup` helper used to build dynamic Yup schemas.
 
 ---
 
 ## Suggested Workflow
 
-1. Run migrations (`npm run migrate`).
-2. Seed the default administrator (`npm run seed`).
-3. Start the backend (`npm run dev`) and frontend (`npm run dev`).
-4. Login with `admin@example.com / password123`, then manage additional users, roles, and permissions from the Admin Panel.
+1. Create `.env` files for backend & frontend.
+2. `npm install` in both `backend/` and `frontend/`.
+3. Run `npm run migrate` then `npm run seed` (backend).
+4. Start backend (`npm run dev`) and frontend (`npm run dev`).
+5. Login with `admin@example.com / password123`, configure custom fields under **Settings**, then use entity forms (Lead/Opportunity/etc.) to experience dynamic rendering.
