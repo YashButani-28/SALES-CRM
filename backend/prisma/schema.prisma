@@ -1,0 +1,41 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model CustomField {
+  id           String              @id @default(cuid())
+  entity       String
+  fieldType    String
+  label        String
+  key          String              @unique
+  required     Boolean
+  validation   Json?
+  defaultValue String?
+  order        Int
+  group        String?
+  createdBy    String
+  updatedBy    String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  values       CustomFieldValue[]
+}
+
+model CustomFieldValue {
+  id        String      @id @default(cuid())
+  entity    String
+  entityId  String
+  fieldId   String
+  value     String?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  field     CustomField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@index([entity, entityId])
+}
