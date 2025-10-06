@@ -96,23 +96,26 @@ const CustomFieldModal = ({ open, entity, initialValues, onSubmit, onCancel, con
   const selectedType = watch('fieldType');
 
   const submitHandler = handleSubmit(async (values) => {
+    // Clean up validation object
+    const validation = { ...values.validation };
+    
+    // Remove empty strings from validation
+    Object.keys(validation).forEach(key => {
+      if (validation[key] === '') {
+        delete validation[key];
+      }
+    });
+    
     const payload: CreateCustomFieldPayload = {
       entity,
       fieldType: values.fieldType,
       label: values.label,
       key: values.key,
       required: values.required,
-      defaultValue: values.defaultValue ?? undefined,
-      validation: values.validation,
+      defaultValue: values.defaultValue || '',
+      validation: Object.keys(validation).length > 0 ? validation : undefined,
       group: values.group || undefined,
     };
-
-    if (values.validation?.options && values.fieldType === 'Dropdown') {
-      payload.validation = {
-        ...values.validation,
-        options: values.validation.options,
-      };
-    }
 
     await onSubmit(payload);
   });

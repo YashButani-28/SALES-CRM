@@ -31,8 +31,9 @@ const schema = yup.object({
 
 const RoleAccessManager = () => {
   const dispatch = useAppDispatch();
-  const { list: roles, modulePermissionsByRole, saveStatus } = useAppSelector((state) => state.roles);
-  const { list: modules, actions: moduleActions } = useAppSelector((state) => state.modules);
+  const { list: roles = [] } = useAppSelector((state) => state.roles || { list: [] });
+  const { list: modules = [] } = useAppSelector((state) => state.modules || { list: [] });
+  const { modulePermissionsByRole = {}, saveStatus } = useAppSelector((state) => state.roles || { modulePermissionsByRole: {}, saveStatus: 'idle' });
 
   const {
     control,
@@ -42,9 +43,8 @@ const RoleAccessManager = () => {
     formState: { errors },
   } = useForm({
     resolver: yupResolver(schema),
-    mode: 'onBlur',
     defaultValues: {
-      roleId: undefined,
+      roleId: null,
       assignments: [],
     },
   });
@@ -52,145 +52,120 @@ const RoleAccessManager = () => {
   const selectedRoleId = watch('roleId');
 
   useEffect(() => {
-    if (!roles.length) {
-      dispatch(fetchRoles());
-    }
-    if (!modules.length) {
-      dispatch(fetchModules());
-    }
-  }, [dispatch, roles.length, modules.length]);
-
-  useEffect(() => {
-    if (modules.length) {
-      setValue(
-        'assignments',
-        modules.map((module) => ({ module: module.key, actions: [] })),
-        { shouldDirty: false }
-      );
-    }
-  }, [modules, setValue]);
+    dispatch(fetchRoles()).catch(err => {
+      console.error("Failed to fetch roles:", err);
+    });
+    dispatch(fetchModules()).catch(err => {
+      console.error("Failed to fetch modules:", err);
+    });
+  }, [dispatch]);
 
   useEffect(() => {
     if (selectedRoleId) {
-      dispatch(fetchRoleModulePermissions(selectedRoleId));
+      dispatch(fetchRoleModulePermissions(selectedRoleId)).catch(err => {
+        console.error("Failed to fetch role module permissions:", err);
+      });
     }
   }, [dispatch, selectedRoleId]);
 
   useEffect(() => {
-    if (!selectedRoleId || !modules.length) {
-      return;
-    }
+    if (selectedRoleId && modulePermissionsByRole[selectedRoleId]) {
+      const permissions = modulePermissionsByRole[selectedRoleId];
+      const moduleMap = new Map(permissions.map((p) => [p.module, p.actions]));
 
-    const saved = modulePermissionsByRole[selectedRoleId] || [];
-    const nextAssignments = modules.map((module) => {
-      const existing = saved.find((permission) => permission.module === module.key);
-      return {
+      const assignments = modules.map((module) => ({
         module: module.key,
-        actions: existing?.actions || [],
-      };
-    });
+        actions: moduleMap.get(module.key) || [],
+      }));
 
-    setValue('assignments', nextAssignments, { shouldDirty: false });
-  }, [selectedRoleId, modulePermissionsByRole, modules, setValue]);
+      setValue('assignments', assignments);
+    } else if (modules.length > 0) {
+      setValue(
+        'assignments',
+        modules.map((module) => ({ module: module.key, actions: [] }))
+      );
+    }
+  }, [setValue, selectedRoleId, modulePermissionsByRole, modules]);
 
-  const tableData = useMemo(
-    () =>
-      modules.map((module, index) => ({
-        key: module.key,
-        index,
-        moduleKey: module.key,
-        title: module.name,
-        description: module.description,
-      })),
-    [modules]
-  );
+  const tableData = useMemo(() => {
+    const assignments = watch('assignments') || [];
+    return assignments.map((assignment, index) => ({
+      key: assignment.module,
+      module: modules.find((m) => m.key === assignment.module)?.name || assignment.module,
+      actions: assignment.actions || [],
+      index,
+    }));
+  }, [watch, modules]);
 
-  const columns = useMemo(() => {
-    const actionKeys = moduleActions.length ? moduleActions : DEFAULT_ACTION_ORDER;
-
-    return [
-      {
-        title: 'Module',
-        dataIndex: 'title',
-        key: 'module',
-        render: (text, record) => (
-          <div>
-            <Controller
-              name={`assignments.${record.index}.module`}
-              control={control}
-              render={({ field }) => <input type="hidden" {...field} value={record.moduleKey} />}
+  const columns = [
+    {
+      title: 'Module',
+      dataIndex: 'module',
+      key: 'module',
+    },
+    ...DEFAULT_ACTION_ORDER.map((action) => ({
+      title: ACTION_LABELS[action],
+      key: action,
+      render: (_, record) => (
+        <Controller
+          name={`assignments.${record.index}.actions`}
+          control={control}
+          render={({ field }) => (
+            <Checkbox
+              checked={field.value?.includes(action)}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                const currentActions = [...(field.value || [])];
+                if (checked && !currentActions.includes(action)) {
+                  field.onChange([...currentActions, action]);
+                } else if (!checked && currentActions.includes(action)) {
+                  field.onChange(currentActions.filter((a) => a !== action));
+                }
+              }}
             />
-            <Typography.Text strong>{text}</Typography.Text>
-            <Typography.Paragraph className="!mb-0 text-xs text-slate-500">
-              {record.description}
-            </Typography.Paragraph>
-          </div>
-        ),
-      },
-      ...actionKeys.map((action) => ({
-        title: ACTION_LABELS[action] || action,
-        dataIndex: action,
-        key: `${action}-column`,
-        align: 'center',
-        render: (_text, record) => (
-          <Controller
-            name={`assignments.${record.index}.actions`}
-            control={control}
-            render={({ field }) => (
-              <Checkbox
-                checked={field.value?.includes(action)}
-                disabled={!selectedRoleId}
-                onChange={(event) => {
-                  const checked = event.target.checked;
-                  const current = new Set(field.value || []);
-                  if (checked) {
-                    current.add(action);
-                  } else {
-                    current.delete(action);
-                  }
-                  field.onChange(Array.from(current));
-                }}
-              />
-            )}
-          />
-        ),
-      })),
-    ];
-  }, [control, moduleActions, selectedRoleId]);
+          )}
+        />
+      ),
+    })),
+  ];
 
-  const onSubmit = async (values) => {
-    const payload = {
-      roleId: values.roleId,
-      permissions: values.assignments,
-    };
+  const onSubmit = async (data) => {
+    if (!data.roleId) return;
+    
     try {
-      await dispatch(saveRoleModulePermissions(payload)).unwrap();
+      await dispatch(
+        saveRoleModulePermissions({
+          roleId: data.roleId,
+          permissions: data.assignments,
+        })
+      ).unwrap();
     } catch (error) {
-      // notifications handled in slice
+      console.error("Failed to save role module permissions:", error);
     }
   };
 
   return (
-    <Card className="w-full rounded-2xl border border-slate-200 shadow-card">
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-end gap-4">
-            <div className="min-w-[220px]">
-              <label className="text-sm font-medium text-slate-700">Role</label>
-              <Controller
-                name="roleId"
-                control={control}
-                render={({ field }) => (
-                  <Select
-                    {...field}
-                    placeholder="Select a role"
-                    options={roles.map((role) => ({ label: role.name, value: role.id }))}
-                  />
-                )}
+    <Card title="Module Access Control" className="w-full rounded-2xl border border-slate-200 shadow-card">
+      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6">
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-medium text-slate-700">Select Role</label>
+          <Controller
+            name="roleId"
+            control={control}
+            render={({ field, fieldState }) => (
+              <Select
+                {...field}
+                size="large"
+                placeholder="Select a role to manage permissions"
+                options={roles.map((role) => ({ label: role.name, value: role.id }))}
+                status={fieldState.error ? 'error' : ''}
               />
-              {errors.roleId && <p className="mt-1 text-sm text-rose-500">{errors.roleId.message}</p>}
-            </div>
-          </div>
+            )}
+          />
+          {errors.roleId && <div className="text-xs text-red-500">{errors.roleId.message}</div>}
+        </div>
+
+        <div className="flex flex-col gap-2">
           <Alert
             type="info"
             showIcon

@@ -57,7 +57,7 @@ const CustomFieldsPage = () => {
 
   const fields = useAppSelector(selectCustomFields(selectedEntity));
   const lastFetchedAt = useAppSelector(selectCustomFieldsTimestamp(selectedEntity));
-  const isAdmin = useAppSelector((state) => state.auth.user?.role === 'Admin');
+  const isAdmin = useAppSelector((state) => state.auth.user?.role?.name === 'Admin');
 
   useEffect(() => {
     if (!isAdmin) return;

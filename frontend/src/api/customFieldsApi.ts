@@ -43,11 +43,16 @@ export const fetchCustomFieldsApi = async (entity: string) => {
 };
 
 export const addCustomFieldApi = async (payload: CreateCustomFieldPayload) => {
-  const response = await client.post<{ success: boolean; data: CustomField }>(
-    basePath,
-    payload
-  );
-  return response.data.data;
+  try {
+    const response = await client.post<{ success: boolean; data: CustomField }>(
+      basePath,
+      payload
+    );
+    return response.data.data;
+  } catch (error) {
+    console.error('Error creating custom field:', error.response?.data || error);
+    throw error;
+  }
 };
 
 export const updateCustomFieldApi = async (id: string, payload: UpdateCustomFieldPayload) => {

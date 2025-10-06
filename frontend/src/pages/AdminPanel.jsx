@@ -4,14 +4,19 @@ import RoleAccessManager from '../components/admin/RoleAccessManager.jsx';
 import RoleManager from '../components/admin/RoleManager.jsx';
 import UserManager from '../components/admin/UserManager.jsx';
 import { useAppSelector } from '../hooks/storeHooks';
+import { useState } from 'react';
 
 const AdminPanel = () => {
   const { user } = useAppSelector((state) => state.auth);
-  const roleName = user?.role?.name?.toLowerCase();
+  const [activeTab, setActiveTab] = useState('users');
+  
+  // Safely check permissions
+  const roleName = user?.role?.name?.toLowerCase() || '';
   const isSuperAdmin = roleName === 'super admin' || user?.email === 'admin@example.com';
-  const canManagePermissions = isSuperAdmin || user?.permissions?.includes('manage_permissions');
-  const canManageRoles = isSuperAdmin || user?.permissions?.includes('manage_roles');
-  const canManageUsers = isSuperAdmin || user?.permissions?.includes('manage_users');
+  const userPermissions = user?.permissions || [];
+  const canManagePermissions = isSuperAdmin || userPermissions.includes('manage_permissions');
+  const canManageRoles = isSuperAdmin || userPermissions.includes('manage_roles');
+  const canManageUsers = isSuperAdmin || userPermissions.includes('manage_users');
 
   const tabs = [];
 
@@ -64,10 +69,20 @@ const AdminPanel = () => {
     );
   }
 
+  const handleTabChange = (key) => {
+    setActiveTab(key);
+  };
+
   return (
     <div className="mx-auto max-w-6xl px-2 py-6 md:px-4">
       <div className="rounded-2xl border border-slate-200 bg-white p-2 md:p-4 shadow-card">
-        <Tabs defaultActiveKey={tabs[0].key} size="large" items={tabs} className="user-management-tabs" />
+        <Tabs 
+          activeKey={activeTab} 
+          onChange={handleTabChange}
+          size="large" 
+          items={tabs} 
+          className="user-management-tabs" 
+        />
       </div>
     </div>
   );

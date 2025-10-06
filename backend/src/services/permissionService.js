@@ -1,21 +1,19 @@
-import { query } from '../db/pool.js';
-
-export const createPermission = async ({ name, description }) => {
-  const result = await query(
-    `INSERT INTO permissions (name, description)
-     VALUES ($1, $2)
-     RETURNING id, name, description, created_at, updated_at`,
-    [name, description || null]
-  );
-
-  return result.rows[0];
-};
+// backend/src/services/permissionService.js
+import { Permission } from '../models/index.js';
 
 export const listPermissions = async () => {
-  const result = await query(
-    `SELECT id, name, description, created_at, updated_at
-     FROM permissions
-     ORDER BY name`
-  );
-  return result.rows;
+  return Permission.findAll({
+    order: [['name', 'ASC']]
+  });
+};
+
+export const createPermission = async ({ name, description }) => {
+  return Permission.create({
+    name,
+    description
+  });
+};
+
+export const getPermissionById = async (id) => {
+  return Permission.findByPk(id);
 };

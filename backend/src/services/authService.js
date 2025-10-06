@@ -33,7 +33,27 @@ export const loginUser = async ({ email, password }) => {
   const payload = { sub: user.id, role: user.role_name };
   const token = jwt.sign(payload, config.jwtSecret, { expiresIn: '1h' });
 
-  const enrichedUser = await getUserByIdWithPermissions(user.id);
+  let enrichedUser;
+  try {
+    enrichedUser = await getUserByIdWithPermissions(user.id);
+  } catch (error) {
+    // If there's an error getting module permissions, still allow login
+    // but with basic user info
+    console.error('Error fetching user permissions:', error);
+    enrichedUser = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      status: user.status,
+      role_id: user.role_id,
+      role: {
+        id: user.role?.id,
+        name: user.role?.name
+      },
+      permissions: [],
+      modulePermissions: []
+    };
+  }
 
   return { token, user: enrichedUser };
 };

@@ -1,151 +1,123 @@
-import { pool } from '../db/pool.js';
-import { query } from '../db/pool.js';
-import { MODULE_ACTIONS } from '../constants/modules.js';
+// backend/src/services/roleService.js
+import { Role, Permission, RolePermission, ModulePermission } from '../models/index.js';
+import sequelize from '../config/database.js';
 
-export const createRole = async ({ name, description, permissionIds = [] }) => {
-  const client = await pool.connect();
+export const createRole = async ({ name, description, permissionIds }) => {
+  const transaction = await sequelize.transaction();
+  
   try {
-    await client.query('BEGIN');
-
-    const roleResult = await client.query(
-      `INSERT INTO roles (name, description)
-       VALUES ($1, $2)
-       RETURNING id, name, description, created_at, updated_at`,
-      [name, description || null]
+    const role = await Role.create(
+      { name, description },
+      { transaction }
     );
-
-    const role = roleResult.rows[0];
-
-    if (permissionIds.length > 0) {
-      await client.query(
-        `INSERT INTO role_permissions (role_id, permission_id)
-         SELECT $1, UNNEST($2::int[])
-         ON CONFLICT (role_id, permission_id) DO NOTHING`,
-        [role.id, permissionIds]
-      );
+    
+    if (permissionIds && permissionIds.length > 0) {
+      const rolePermissions = permissionIds.map(permissionId => ({
+        role_id: role.id,
+        permission_id: permissionId
+      }));
+      
+      await RolePermission.bulkCreate(rolePermissions, { transaction });
     }
-
-    await client.query('COMMIT');
-
-    return role;
+    
+    await transaction.commit();
+    
+    return getRoleWithPermissions(role.id);
   } catch (error) {
-    await client.query('ROLLBACK');
+    await transaction.rollback();
     throw error;
-  } finally {
-    client.release();
   }
 };
 
 export const listRolesWithPermissions = async () => {
-  const result = await query(
-    `SELECT r.id,
-            r.name,
-            r.description,
-            r.created_at,
-            r.updated_at,
-            COALESCE(json_agg(DISTINCT jsonb_build_object('id', p.id, 'name', p.name))
-                     FILTER (WHERE p.id IS NOT NULL), '[]') AS permissions,
-            COALESCE(json_agg(DISTINCT jsonb_build_object(
-                'module', rmp.module,
-                'can_read', rmp.can_read,
-                'can_create', rmp.can_create,
-                'can_update', rmp.can_update,
-                'can_delete', rmp.can_delete
-            )) FILTER (WHERE rmp.module IS NOT NULL), '[]') AS module_permissions
-     FROM roles r
-     LEFT JOIN role_permissions rp ON rp.role_id = r.id
-     LEFT JOIN permissions p ON p.id = rp.permission_id
-     LEFT JOIN role_module_permissions rmp ON rmp.role_id = r.id
-     GROUP BY r.id
-     ORDER BY r.name`
-  );
-
-  return result.rows.map((row) => {
-    const rawModulePermissions = Array.isArray(row.module_permissions) ? row.module_permissions : [];
-
-    const rawPermissions = Array.isArray(row.permissions) ? row.permissions : [];
-
+  const roles = await Role.findAll({
+    include: [
+      {
+        model: Permission,
+        as: 'permissions',
+        through: { attributes: [] }
+      }
+    ]
+  });
+  
+  return roles.map(role => {
+    const roleObj = role.toJSON();
     return {
-      id: row.id,
-      name: row.name,
-      description: row.description,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-      permissions: rawPermissions,
-      modulePermissions: rawModulePermissions.map((item) => ({
-        module: item.module,
-        actions: MODULE_ACTIONS.filter((action) => item[`can_${action}`]),
-      })),
+      id: roleObj.id,
+      name: roleObj.name,
+      description: roleObj.description,
+      permissions: roleObj.permissions.map(p => ({
+        id: p.id,
+        name: p.name,
+        description: p.description
+      }))
     };
   });
 };
 
-export const getRoleModulePermissions = async (roleId) => {
-  const result = await query(
-    `SELECT module, can_read, can_create, can_update, can_delete
-     FROM role_module_permissions
-     WHERE role_id = $1
-     ORDER BY module`,
-    [roleId]
-  );
+export const getRoleWithPermissions = async (roleId) => {
+  const role = await Role.findByPk(roleId, {
+    include: [
+      {
+        model: Permission,
+        as: 'permissions',
+        through: { attributes: [] }
+      }
+    ]
+  });
+  
+  if (!role) return null;
+  
+  const roleObj = role.toJSON();
+  return {
+    id: roleObj.id,
+    name: roleObj.name,
+    description: roleObj.description,
+    permissions: roleObj.permissions.map(p => ({
+      id: p.id,
+      name: p.name,
+      description: p.description
+    }))
+  };
+};
 
-  return result.rows.map((row) => ({
-    module: row.module,
-    actions: MODULE_ACTIONS.filter((action) => row[`can_${action}`]),
+export const getRoleModulePermissions = async (roleId) => {
+  const modulePermissions = await ModulePermission.findAll({
+    where: { role_id: roleId },
+    raw: true
+  });
+  
+  return modulePermissions.map(mp => ({
+    module: mp.module,
+    actions: mp.actions
   }));
 };
 
-export const setRoleModulePermissions = async (roleId, moduleAssignments = []) => {
-  const client = await pool.connect();
+export const setRoleModulePermissions = async (roleId, permissions) => {
+  const transaction = await sequelize.transaction();
+  
   try {
-    await client.query('BEGIN');
-
-    await client.query('DELETE FROM role_module_permissions WHERE role_id = $1', [roleId]);
-
-    for (const assignment of moduleAssignments) {
-      if (!assignment?.module) {
-        continue;
-      }
-      const moduleKey = String(assignment.module);
-      const actions = Array.isArray(assignment.actions) ? assignment.actions : [];
-      const values = MODULE_ACTIONS.reduce(
-        (acc, action) => ({ ...acc, [action]: actions.includes(action) }),
-        {}
-      );
-
-      await client.query(
-        `INSERT INTO role_module_permissions (
-            role_id,
-            module,
-            can_read,
-            can_create,
-            can_update,
-            can_delete
-         )
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (role_id, module)
-         DO UPDATE SET
-           can_read = EXCLUDED.can_read,
-           can_create = EXCLUDED.can_create,
-           can_update = EXCLUDED.can_update,
-           can_delete = EXCLUDED.can_delete,
-           updated_at = NOW();`,
-        [
-          roleId,
-          moduleKey,
-          values.read || false,
-          values.create || false,
-          values.update || false,
-          values.delete || false,
-        ]
-      );
+    // Delete existing permissions
+    await ModulePermission.destroy({
+      where: { role_id: roleId },
+      transaction
+    });
+    
+    // Create new permissions
+    if (permissions && permissions.length > 0) {
+      const modulePermissions = permissions.map(p => ({
+        role_id: roleId,
+        module: p.module,
+        actions: p.actions
+      }));
+      
+      await ModulePermission.bulkCreate(modulePermissions, { transaction });
     }
-
-    await client.query('COMMIT');
+    
+    await transaction.commit();
+    return true;
   } catch (error) {
-    await client.query('ROLLBACK');
+    await transaction.rollback();
     throw error;
-  } finally {
-    client.release();
   }
 };

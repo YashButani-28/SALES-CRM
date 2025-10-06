@@ -17,12 +17,14 @@ const schema = yup.object({
 
 const UserManager = () => {
   const dispatch = useAppDispatch();
-  const { list: roles } = useAppSelector((state) => state.roles);
-  const { created } = useAppSelector((state) => state.users);
+  const { list: roles = [] } = useAppSelector((state) => state.roles || { list: [] });
+  const { created = [] } = useAppSelector((state) => state.users || { created: [] });
 
   useEffect(() => {
-    if (!roles.length) dispatch(fetchRoles());
-  }, [dispatch, roles.length]);
+    dispatch(fetchRoles()).catch(err => {
+      console.error("Failed to fetch roles:", err);
+    });
+  }, [dispatch]);
 
   const {
     control,
@@ -41,15 +43,19 @@ const UserManager = () => {
   });
 
   const onSubmit = async (values) => {
-    const payload = {
-      name: values.name,
-      email: values.email,
-      password: values.password,
-      roleId: values.roleId || undefined,
-      status: values.status,
-    };
-    await dispatch(createUserAccount(payload)).unwrap();
-    reset({ name: '', email: '', password: '', roleId: null, status: 'active' });
+    try {
+      const payload = {
+        name: values.name,
+        email: values.email,
+        password: values.password,
+        roleId: values.roleId || undefined,
+        status: values.status,
+      };
+      await dispatch(createUserAccount(payload)).unwrap();
+      reset({ name: '', email: '', password: '', roleId: null, status: 'active' });
+    } catch (error) {
+      console.error("Failed to create user:", error);
+    }
   };
 
   const roleNameById = new Map(roles.map((role) => [role.id, role.name]));
@@ -78,29 +84,43 @@ const UserManager = () => {
               <Controller
                 name="name"
                 control={control}
-                render={({ field }) => <Input {...field} placeholder="Jane Cooper" size="large" />}
+                render={({ field }) => (
+                  <Input {...field} size="large" className="w-full" placeholder="John Doe" />
+                )}
               />
               {errors.name && <p className="mt-1 text-sm text-rose-500">{errors.name.message}</p>}
             </Col>
             <Col xs={24} md={12}>
-              <label className="text-sm font-medium text-slate-700">Email</label>
+              <label className="text-sm font-medium text-slate-700">Email address</label>
               <Controller
                 name="email"
                 control={control}
-                render={({ field }) => <Input {...field} placeholder="jane@example.com" size="large" />}
+                render={({ field }) => (
+                  <Input
+                    {...field}
+                    size="large"
+                    className="w-full"
+                    placeholder="john.doe@example.com"
+                    type="email"
+                  />
+                )}
               />
               {errors.email && <p className="mt-1 text-sm text-rose-500">{errors.email.message}</p>}
             </Col>
+          </Row>
+          <Row gutter={16} className="mt-4">
             <Col xs={24} md={12}>
               <label className="text-sm font-medium text-slate-700">Password</label>
               <Controller
                 name="password"
                 control={control}
-                render={({ field }) => <Input.Password {...field} placeholder="Secure password" size="large" />}
+                render={({ field }) => (
+                  <Input.Password {...field} size="large" className="w-full" placeholder="••••••••" />
+                )}
               />
               {errors.password && <p className="mt-1 text-sm text-rose-500">{errors.password.message}</p>}
             </Col>
-            <Col xs={24} md={6}>
+            <Col xs={24} md={12}>
               <label className="text-sm font-medium text-slate-700">Role</label>
               <Controller
                 name="roleId"
@@ -108,16 +128,22 @@ const UserManager = () => {
                 render={({ field }) => (
                   <Select
                     {...field}
-                    allowClear
-                    placeholder="Assign a role"
-                    className="w-full"
                     size="large"
-                    options={roles.map((role) => ({ label: role.name, value: role.id }))}
+                    className="w-full"
+                    placeholder="Select a role"
+                    allowClear
+                    options={roles.map((role) => ({
+                      label: role.name,
+                      value: role.id,
+                    }))}
                   />
                 )}
               />
+              {errors.roleId && <p className="mt-1 text-sm text-rose-500">{errors.roleId.message}</p>}
             </Col>
-            <Col xs={24} md={6}>
+          </Row>
+          <Row gutter={16} className="mt-4">
+            <Col xs={24} md={12}>
               <label className="text-sm font-medium text-slate-700">Status</label>
               <Controller
                 name="status"

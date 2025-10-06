@@ -1,12 +1,13 @@
 import 'dotenv/config';
 import bcrypt from 'bcrypt';
-import { pool } from './pool.js';
+import sequelize from '../config/database.js';
+import { User, Role, Permission, RolePermission } from '../models/index.js';
 import { config } from '../config/env.js';
 
 const ADMIN_USER = {
   name: 'Super Admin',
   email: 'admin@example.com',
-  password: 'password123',
+  password: 'admin123',
   status: 'active',
 };
 
@@ -21,110 +22,123 @@ const ADMIN_PERMISSIONS = [
   { name: 'manage_permissions', description: 'Create and manage permissions' },
 ];
 
-const ensurePermissions = async (client) => {
-  const names = ADMIN_PERMISSIONS.map((permission) => permission.name);
-  const existing = await client.query(
-    'SELECT id, name FROM permissions WHERE name = ANY($1)',
-    [names]
-  );
-
-  const idByName = new Map(existing.rows.map((row) => [row.name, row.id]));
-
-  for (const permission of ADMIN_PERMISSIONS) {
-    if (!idByName.has(permission.name)) {
-      const result = await client.query(
-        `INSERT INTO permissions (name, description)
-         VALUES ($1, $2)
-         RETURNING id, name`,
-        [permission.name, permission.description]
-      );
-      const inserted = result.rows[0];
-      idByName.set(inserted.name, inserted.id);
-    }
+const ensurePermissions = async (transaction) => {
+  const permissionMap = new Map();
+  
+  for (const perm of ADMIN_PERMISSIONS) {
+    const [permission] = await Permission.findOrCreate({
+      where: { name: perm.name },
+      defaults: { description: perm.description },
+      transaction
+    });
+    
+    permissionMap.set(perm.name, permission.id);
   }
-
-  return idByName;
+  
+  return permissionMap;
 };
 
-const ensureAdminRole = async (client, permissionIds) => {
-  const existing = await client.query(
-    'SELECT id FROM roles WHERE LOWER(name) = LOWER($1) LIMIT 1',
-    [ADMIN_ROLE.name]
-  );
-
-  let roleId;
-  if (existing.rows.length > 0) {
-    roleId = existing.rows[0].id;
-    await client.query(
-      'UPDATE roles SET description = $2 WHERE id = $1',
-      [roleId, ADMIN_ROLE.description]
-    );
-  } else {
-    const result = await client.query(
-      `INSERT INTO roles (name, description)
-       VALUES ($1, $2)
-       RETURNING id`,
-      [ADMIN_ROLE.name, ADMIN_ROLE.description]
-    );
-    roleId = result.rows[0].id;
+const ensureAdminRole = async (transaction, permissionIds) => {
+  const [role] = await Role.findOrCreate({
+    where: { name: ADMIN_ROLE.name },
+    defaults: { description: ADMIN_ROLE.description },
+    transaction
+  });
+  
+  // Ensure role has all permissions
+  const existingPermissions = await RolePermission.findAll({
+    where: { role_id: role.id },
+    transaction
+  });
+  
+  const existingPermissionIds = new Set(existingPermissions.map(rp => rp.permission_id));
+  
+  const newPermissions = permissionIds.filter(id => !existingPermissionIds.has(id))
+    .map(permissionId => ({
+      role_id: role.id,
+      permission_id: permissionId
+    }));
+  
+  if (newPermissions.length > 0) {
+    await RolePermission.bulkCreate(newPermissions, { transaction });
   }
-
-  if (permissionIds.length > 0) {
-    await client.query(
-      `INSERT INTO role_permissions (role_id, permission_id)
-       SELECT $1, UNNEST($2::int[])
-       ON CONFLICT (role_id, permission_id) DO NOTHING`,
-      [roleId, permissionIds]
-    );
-  }
-
-  return roleId;
+  
+  return role.id;
 };
 
-const createAdminUser = async (client, roleId) => {
+const createAdminUser = async (transaction, roleId) => {
   const passwordHash = await bcrypt.hash(ADMIN_USER.password, config.bcryptSaltRounds);
-
-  await client.query(
-    `INSERT INTO users (name, email, password_hash, role_id, status)
-     VALUES ($1, $2, $3, $4, $5)
-     ON CONFLICT (email) DO NOTHING`,
-    [ADMIN_USER.name, ADMIN_USER.email, passwordHash, roleId, ADMIN_USER.status]
-  );
+  
+  const [user] = await User.findOrCreate({
+    where: { email: ADMIN_USER.email },
+    defaults: {
+      name: ADMIN_USER.name,
+      password_hash: passwordHash,
+      role_id: roleId,
+      status: ADMIN_USER.status
+    },
+    transaction
+  });
+  
+  return user;
 };
+
 
 const seed = async () => {
-  const client = await pool.connect();
-
+  const transaction = await sequelize.transaction();
+  
   try {
-    await client.query('BEGIN');
-
-    const { rows } = await client.query('SELECT COUNT(*)::int AS count FROM users');
-    const userCount = rows[0]?.count ?? 0;
-
+    // Check if users exist
+    const userCount = await User.count({ transaction });
+    
     if (userCount > 0) {
-      await client.query('COMMIT');
+      await transaction.commit();
       console.log('Users already exist. Skipping seed.');
       return;
     }
-
-    const permissionMap = await ensurePermissions(client);
+    
+    const permissionMap = await ensurePermissions(transaction);
     const permissionIds = Array.from(permissionMap.values());
-    const roleId = await ensureAdminRole(client, permissionIds);
-    await createAdminUser(client, roleId);
-
-    await client.query('COMMIT');
+    const roleId = await ensureAdminRole(transaction, permissionIds);
+    await createAdminUser(transaction, roleId);
+    
+    // Add this line to set up default module permissions
+    await setupDefaultModulePermissions(transaction, roleId);
+    
+    await transaction.commit();
     console.log('Seed completed: default admin user created.');
   } catch (error) {
-    await client.query('ROLLBACK');
+    await transaction.rollback();
     console.error('Seed failed:', error.message);
     throw error;
   } finally {
-    client.release();
-    await pool.end();
+    await sequelize.close();
   }
 };
 
-seed().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+const setupDefaultModulePermissions = async (transaction, roleId) => {
+  // Check if module permissions already exist for this role
+  const existingPermissions = await ModulePermission.count({
+    where: { role_id: roleId },
+    transaction
+  });
+  
+  if (existingPermissions > 0) {
+    console.log('Module permissions already exist for this role. Skipping.');
+    return;
+  }
+  
+  // Add default permissions for all modules
+  const modules = APPLICATION_MODULES.map(module => module.key);
+  const allActions = ['read', 'create', 'update', 'delete'];
+  
+  const modulePermissions = modules.map(module => ({
+    role_id: roleId,
+    module,
+    actions: allActions
+  }));
+  
+  await ModulePermission.bulkCreate(modulePermissions, { transaction });
+  console.log(`Added default module permissions for role ID ${roleId}`);
+};
+seed();

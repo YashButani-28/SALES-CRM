@@ -15,13 +15,17 @@ const schema = yup.object({
 
 const RoleManager = () => {
   const dispatch = useAppDispatch();
-  const { list: permissions } = useAppSelector((state) => state.permissions);
-  const { list: roles } = useAppSelector((state) => state.roles);
+  const { list: permissions = [] } = useAppSelector((state) => state.permissions || { list: [] });
+  const { list: roles = [] } = useAppSelector((state) => state.roles || { list: [] });
 
   useEffect(() => {
-    if (!permissions.length) dispatch(fetchPermissions());
-    if (!roles.length) dispatch(fetchRoles());
-  }, [dispatch, permissions.length, roles.length]);
+    dispatch(fetchPermissions()).catch(err => {
+      console.error("Failed to fetch permissions:", err);
+    });
+    dispatch(fetchRoles()).catch(err => {
+      console.error("Failed to fetch roles:", err);
+    });
+  }, [dispatch]);
 
   const {
     control,
@@ -34,8 +38,12 @@ const RoleManager = () => {
   });
 
   const onSubmit = async (values) => {
-    await dispatch(createRole(values)).unwrap();
-    reset({ name: '', description: '', permissionIds: [] });
+    try {
+      await dispatch(createRole(values)).unwrap();
+      reset({ name: '', description: '', permissionIds: [] });
+    } catch (error) {
+      console.error("Failed to create role:", error);
+    }
   };
 
   const columns = [
@@ -45,10 +53,12 @@ const RoleManager = () => {
       title: 'Permissions',
       dataIndex: 'permissions',
       key: 'permissions',
-      render: (value) =>
-        Array.isArray(value) && value.length
-          ? value.map((item) => item.name).join(', ')
-          : '—',
+      render: (_, record) => {
+        const rolePermissions = record.permissions || [];
+        return rolePermissions.length > 0
+          ? rolePermissions.map((p) => p.name).join(', ')
+          : 'No permissions';
+      },
     },
   ];
 
@@ -56,16 +66,18 @@ const RoleManager = () => {
     <Card title="Roles" className="w-full rounded-2xl border border-slate-200 shadow-card">
       <Space direction="vertical" size="large" className="w-full">
         <Typography.Paragraph className="!mb-0 text-sm text-slate-500">
-          Bundle feature-level permissions into reusable access templates for your team.
+          Define roles with specific permissions to control access to different parts of the system.
         </Typography.Paragraph>
         <form onSubmit={handleSubmit(onSubmit)} className="w-full">
           <Row gutter={16}>
             <Col xs={24} md={12}>
-              <label className="text-sm font-medium text-slate-700">Role name</label>
+              <label className="text-sm font-medium text-slate-700">Role Name</label>
               <Controller
                 name="name"
                 control={control}
-                render={({ field }) => <Input {...field} placeholder="Sales Manager" size="large" />}
+                render={({ field }) => (
+                  <Input {...field} size="large" className="w-full" placeholder="Sales Manager" />
+                )}
               />
               {errors.name && <p className="mt-1 text-sm text-rose-500">{errors.name.message}</p>}
             </Col>
@@ -74,11 +86,23 @@ const RoleManager = () => {
               <Controller
                 name="description"
                 control={control}
-                render={({ field }) => <Input {...field} placeholder="Oversees account executives" size="large" />}
+                render={({ field }) => (
+                  <Input
+                    {...field}
+                    size="large"
+                    className="w-full"
+                    placeholder="Manages sales team and has access to reports"
+                  />
+                )}
               />
+              {errors.description && (
+                <p className="mt-1 text-sm text-rose-500">{errors.description.message}</p>
+              )}
             </Col>
-            <Col span={24}>
-              <label className="text-sm font-medium text-slate-700">Assign permissions</label>
+          </Row>
+          <Row gutter={16} className="mt-4">
+            <Col xs={24}>
+              <label className="text-sm font-medium text-slate-700">Permissions</label>
               <Controller
                 name="permissionIds"
                 control={control}
@@ -86,9 +110,8 @@ const RoleManager = () => {
                   <Select
                     {...field}
                     mode="multiple"
-                    className="w-full"
-                    allowClear
                     size="large"
+                    className="w-full"
                     placeholder="Select permissions"
                     optionFilterProp="label"
                     options={permissions.map((permission) => ({

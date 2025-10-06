@@ -1,32 +1,25 @@
-import { Pool } from 'pg';
-import { config } from '../config/env.js';
-
-const connectionOptions = config.databaseUrl
-  ? { connectionString: config.databaseUrl }
-  : {
-      host: config.db.host,
-      port: config.db.port,
-      user: config.db.user,
-      password: config.db.password,
-      database: config.db.database,
-    };
-
-export const pool = new Pool(connectionOptions);
+// backend/src/db/pool.js
+import sequelize from '../config/database.js';
 
 export const verifyDatabaseConnection = async () => {
-  const client = await pool.connect();
   try {
-    await client.query('SELECT 1');
-  } finally {
-    client.release();
+    await sequelize.authenticate();
+    return true;
+  } catch (error) {
+    console.error('Unable to connect to the database:', error);
+    throw error;
   }
 };
 
 export const query = async (text, params) => {
-  const client = await pool.connect();
   try {
-    return await client.query(text, params);
-  } finally {
-    client.release();
+    const [results] = await sequelize.query(text, {
+      replacements: params,
+      type: sequelize.QueryTypes.SELECT
+    });
+    return { rows: results || [] };
+  } catch (error) {
+    console.error('Query error:', error);
+    throw error;
   }
 };
